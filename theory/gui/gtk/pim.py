@@ -116,7 +116,7 @@ class Pim(object):
     return self._selectedFileDict.keys()
 
   def toggleFileSelection(self):
-    if(not self._selectedFileDict.has_key(self._fileIndex)):
+    if self._fileIndex not in self._selectedFileDict:
       self._selectedFileDict[self._fileIndex] = self.fileLst[self._fileIndex]
     else:
       del self._selectedFileDict[self._fileIndex]
@@ -217,7 +217,7 @@ class Pim(object):
           self.zoomPercent * 100,
           self.fileLst[self._fileIndex],
           ' [slideshow]' if self.slideshow else '',
-          '[selected]' if self._selectedFileDict.has_key(self._fileIndex) else '',
+          '[selected]' if self._fileIndex in self._selectedFileDict else '',
           )
         )
 
