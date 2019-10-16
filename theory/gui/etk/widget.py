@@ -675,11 +675,20 @@ class ListInput(BaseLabelInput):
     pass
 
   def _probeChildWidget(self, childFieldTemplate):
-    self.widgetClass = childFieldTemplate.widget.widgetClass
+    if isinstance(childFieldTemplate.widget, str):
+      if "." in childFieldTemplate.widget:
+        self.widgetKlass = importClass(f"{childFieldTemplate.widget}")
+      else:
+        self.widgetKlass = importClass(
+          f"theory.gui.widget.{childFieldTemplate.widget}"
+        )
+    else:
+      self.widgetClass = childFieldTemplate.widget.widgetClass
 
-    if(self.widgetClass==StringInput.widgetClass):
-      if(hasattr(childFieldTemplate, "maxLen") \
-          and childFieldTemplate.maxLen>20):
+    if self.widgetClass == StringInput.widgetClass:
+      if (hasattr(childFieldTemplate, "maxLen")
+          and childFieldTemplate.maxLen > 20
+          ):
         self.widgetClass = TextInput.widgetClass
         self._createWidget = self._createLongStringWidget
         self.lineBreak = childFieldTemplate.widget.lineBreak

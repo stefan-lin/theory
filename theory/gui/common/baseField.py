@@ -26,7 +26,6 @@ from theory.gui.util import (
     toCurrentTimezone,
     LocalFileObject
     )
-from theory.gui.widget import *
 from theory.utils import formats
 from theory.utils.encoding import smartText, forceStr, forceText
 from theory.utils.ipv6 import cleanIpv6Address
@@ -71,7 +70,7 @@ class Field(object):
   """The function being provided by this class should include data validation,
   valid/error message storage. The relationship between field and widget should
   be one to one."""
-  widget = StringInput
+  widget = "StringInput"
   defaultValidators = [] # Default set of validators
   defaultErrorMessages = {
     'required': _(u'This field is required.'),
@@ -147,8 +146,12 @@ class Field(object):
     #           most cases, the default widget is TextInput.
     #widget = widget or self.widget
     widget = self.widget
-    if(isclass(widget)):
-      widget = self.widget(self.widgetSetter, self.widgetGetter, *args, **kwargs)
+    if isinstance(widget, str):
+      if "." in widget:
+        widgetKlass = importClass(f"{widget}")
+      else:
+        widgetKlass = importClass(f"theory.gui.widget.{widget}")
+      widget = widgetKlass(self.widgetSetter, self.widgetGetter, *args, **kwargs)
       # In some case, ListInput for example, their children input only want the
       # core part instead of the whole part including the instruction
       if ("attrs" not in kwargs
@@ -299,7 +302,7 @@ class Field(object):
     cleaning."""
     # TODO: allow lazy update
     if(self._finalData in validators.EMPTY_VALUES):
-      if(isclass(self.widget)):
+      if isinstance(self.widget, str):
         # return initial data if widget has not been rendered and finalData
         # is empty
         return self.initData
@@ -319,7 +322,7 @@ class Field(object):
     be stored. If we called the updateField() in here, updateField() won't be
     called in the finalData.
     """
-    if(not isclass(self.widget)):
+    if not isinstance(self.widget, str):
       self.widget.updateField()
 
   def widgetSetter(self, data):
@@ -339,7 +342,7 @@ class Field(object):
     return self.__getattribute__(name)
 
 class TextField(Field):
-  widget = StringInput
+  widget = "StringInput"
   lineBreak = "\n"
 
   def __init__(self, maxLen=None, minLen=None, *args, **kwargs):
@@ -349,8 +352,8 @@ class TextField(Field):
       self.validators.append(validators.MinLengthValidator(int(minLen)))
     if maxLen is not None:
       self.validators.append(validators.MaxLengthValidator(int(maxLen)))
-      if(maxLen>128):
-        self.widget = TextInput
+      if maxLen > 128:
+        self.widget = "TextInput"
 
   def toPython(self, value):
     "Returns a Unicode object."
@@ -359,7 +362,7 @@ class TextField(Field):
     return smartText(value)
 
   def widgetAttrs(self, widget):
-    if(self.maxLen<64):
+    if self.maxLen is None or self.maxLen < 64:
       return {"isSingleLine": True}
 
   @property
@@ -376,14 +379,14 @@ class TextField(Field):
       self._initData = initData
 
 class IntegerField(Field):
-  widget = NumericInput
+  widget = "NumericInput"
   defaultErrorMessages = {
     'invalid': _('Enter a whole number.'),
   }
 
   def __init__(self, maxValue=None, minValue=None, *args, **kwargs):
     self.maxValue, self.minValue = maxValue, minValue
-    if kwargs.get('localize') and self.widget == NumericInput:
+    if kwargs.get('localize') and isinstance(self.widget, str):
       # Localized number input is not well supported on most browsers
       kwargs.setdefault('widget', super(IntegerField, self).widget)
     super(IntegerField, self).__init__(*args, **kwargs)
@@ -411,7 +414,7 @@ class IntegerField(Field):
 
   def widgetAttrs(self, widget):
     attrs = super(IntegerField, self).widgetAttrs(widget)
-    if isinstance(widget, NumericInput):
+    if not isinstance(widget, str):
       if self.minValue is not None:
         attrs['min'] = self.minValue
       if self.maxValue is not None:
@@ -451,7 +454,7 @@ class FloatField(IntegerField):
 
   def widgetAttrs(self, widget):
     attrs = super(FloatField, self).widgetAttrs(widget)
-    if isinstance(widget, NumericInput) and 'step' not in widget.attrs:
+    if isinstance(widget, str) and 'step' not in widget.attrs:
       attrs.setdefault('step', 'any')
     return attrs
 
@@ -539,7 +542,7 @@ class DecimalField(IntegerField):
 
   def widgetAttrs(self, widget):
     attrs = super(DecimalField, self).widgetAttrs(widget)
-    if isinstance(widget, NumericInput) and 'step' not in widget.attrs:
+    if isinstance(widget, str) and 'step' not in widget.attrs:
       if self.decimalPlaces is not None:
         # Use exponential notation for small values since they might
         # be parsed as 0 otherwise. ref #20765
@@ -576,7 +579,7 @@ class BaseTemporalField(Field):
 
 
 class DateField(BaseTemporalField):
-  widget = DateInput
+  widget = "DateInput"
   inputFormats = formats.getFormatLazy('DATE_INPUT_FORMATS')
   defaultErrorMessages = {
     'invalid': _('Enter a valid date.'),
@@ -600,7 +603,7 @@ class DateField(BaseTemporalField):
 
 
 class TimeField(BaseTemporalField):
-  widget = TimeInput
+  widget = "TimeInput"
   inputFormats = formats.getFormatLazy('TIME_INPUT_FORMATS')
   defaultErrorMessages = {
     'invalid': _('Enter a valid time.')
@@ -622,7 +625,7 @@ class TimeField(BaseTemporalField):
 
 
 class DateTimeField(BaseTemporalField):
-  widget = DateTimeInput
+  widget = "DateTimeInput"
   inputFormats = formats.getFormatLazy('DATETIME_INPUT_FORMATS')
   defaultErrorMessages = {
     'invalid': _('Enter a valid date/time.'),
@@ -703,7 +706,7 @@ class EmailField(TextField):
 
 
 class FileField(Field):
-  widget = FileselectInput
+  widget = "FileselectInput"
   defaultErrorMessages = {
     'invalid': _("No file was submitted. Check the encoding type on the form."),
     'missing': _("No file was submitted."),
@@ -750,7 +753,7 @@ class FileField(Field):
     return data
 
   def clean(self, data, initial=None, isEmptyForgiven=False):
-    if(isinstance(data, basestring)):
+    if isinstance(data, str):
       data = LocalFileObject(data)
     # If the widget got contradictory inputs, we raise a validation error
     if data is FILE_INPUT_CONTRADICTION:
@@ -833,7 +836,7 @@ class ImagePathField(ImageField):
   pass
 
 class DirPathField(Field):
-  widget = FileselectInput
+  widget = "FileselectInput"
   defaultErrorMessages = {
     'missing': _(u"No directory was submitted."),
     'empty': _(u"The submitted directory is empty."),
@@ -897,7 +900,7 @@ class URLField(TextField):
 
 
 class BooleanField(Field):
-  widget = SelectBoxInput
+  widget = "SelectBoxInput"
 
   def renderWidget(self, *args, **kwargs):
     super(BooleanField, self).renderWidget(*args, **kwargs)
@@ -934,7 +937,7 @@ class NullBooleanField(BooleanField):
   A field whose valid values are None, True and False. Invalid values are
   cleaned to None.
   """
-  widget = SelectBoxInput
+  widget = "SelectBoxInput"
 
   def toPython(self, value):
     """
@@ -967,7 +970,7 @@ class ChoiceField(Field):
   Choices will be (value, label). Value must be the key, as label may be
   crushed while value can never be crushed.
   """
-  widget = SelectBoxInput
+  widget = "SelectBoxInput"
   defaultErrorMessages = {
     'invalidChoice': _('Select a valid choice. %(value)s is not one of the available choices.'),
   }
@@ -999,7 +1002,7 @@ class ChoiceField(Field):
     # choices can be any iterable, but we call list() on it because
     # it will be consumed more than once.
     self._choices = list(value)
-    if not isclass(self.widget):
+    if not isinstance(self.widget, str):
       self.widget.choices = self._choices
 
   choices = property(_getChoices, _setChoices)
@@ -1068,7 +1071,7 @@ class TypedChoiceField(ChoiceField):
 
 class MultipleChoiceField(ChoiceField):
   #hidden_widget = MultipleHiddenInput
-  widget = CheckBoxInput
+  widget = "CheckBoxInput"
   defaultErrorMessages = {
     'invalidChoice': _('Select a valid choice. %(value)s is not one of the available choices.'),
     'invalidList': _('Enter a list of values.'),
@@ -1174,7 +1177,7 @@ class ListField(Field):
   A Field that aggregates the logic of multiple Fields.
   You'll probably want to use this with MultiWidget.
   """
-  widget = ListInput
+  widget = "ListInput"
   defaultErrorMessages = {
     'invalid': _(u'Enter a list of values.'),
   }
@@ -1209,8 +1212,7 @@ class ListField(Field):
     if data is not None:
       for i in data:
         self.addChildField(i, fieldName)
-    #if(not isinstance(self.widget, type)):
-    if(not isclass(self.widget)):
+    if not isinstance(self.widget, str):
       self.widget.childFieldLst = self.fields
 
   def renderWidget(self, *args, **kwargs):
@@ -1223,9 +1225,13 @@ class ListField(Field):
     # For some widget which is unable to display e.x: binary data
     if(self.childFieldTemplate.widget is None):
       self.widget = None
-    elif(isclass(widget)):
+    elif isinstance(widget, str):
+      if "." in widget:
+        widgetKlass = importClass(f"{widget}")
+      else:
+        widgetKlass = importClass(f"theory.gui.widget.{widget}")
       # args[0] is always win, args[1] is always bx
-      self.widget = widget(
+      self.widget = widgetKlass(
           self.widgetSetter,
           self.widgetGetter,
           args[0],
@@ -1310,7 +1316,7 @@ class ListField(Field):
   def finalData(self):
     """It is used to store data directly from widget before validation and
     cleaning."""
-    if(isclass(self.widget) or self.widget.isOverridedData):
+    if isinstance(self.widget, str) or self.widget.isOverridedData:
       # some widget like Multibuttonentry from the e17 need special treatment
       # on retriving data
       data = super(ListField, self).finalData
@@ -1326,14 +1332,14 @@ class ListField(Field):
 
   @finalData.setter
   def finalData(self, finalData):
-    if(isclass(self.widget) or self.widget.isOverridedData):
-    #if(not isinstance(self.widget, type) and self.widget.isOverridedData):
+    if isinstance(self.widget, str) or self.widget.isOverridedData:
+    #if(not isinstance(self.widget, str) and self.widget.isOverridedData):
       Field.finalData.fset(self, finalData)
     else:
       self._setupChildrenData(finalData, "finalData")
 
 class DictField(Field):
-  widget = DictInput
+  widget = "DictInput"
   defaultErrorMessages = {
     'lenUnmatch': _(u'The length of various fields unmatch.'),
   }
@@ -1367,11 +1373,11 @@ class DictField(Field):
     super(DictField, self).__init__(*args, **kwargs)
 
   def _setupChildrenData(self, data, fieldName):
-    keys = data.keys()
+    keys = list(data.keys())
     for i in range(len(keys)):
       self.addChildField((keys[i], data[keys[i]]), fieldName)
 
-    if(not isinstance(self.widget, type)):
+    if(not isinstance(self.widget, str)):
       self.widget.childFieldPairLst = []
       for i in range(len(self.keyFields)):
         self.widget.childFieldPairLst.append(
@@ -1471,7 +1477,7 @@ class DictField(Field):
     """It is used to store data directly from widget before validation and
     cleaning."""
     # TODO: allow lazy update
-    if(isclass(self.widget) or self.widget.isOverridedData):
+    if isinstance(self.widget, str) or self.widget.isOverridedData:
       # some widget like Multibuttonentry from the e17 need special treatment
       # on retriving data
       return super(DictField, self).finalData
@@ -1486,7 +1492,7 @@ class DictField(Field):
 
   @finalData.setter
   def finalData(self, finalData):
-    if(not isinstance(self.widget, type) and self.widget.isOverridedData):
+    if(not isinstance(self.widget, str) and self.widget.isOverridedData):
       Field.finalData.fset(self, finalData)
     else:
       self._setupChildrenData(finalData, "finalData")
@@ -1517,16 +1523,21 @@ class DictField(Field):
     #           most cases, the default widget is TextInput.
     widget = self.widget
     # For some widget which is unable to display e.x: binary data
-    if(self.childValueFieldTemplate.widget is None):
+    if self.childValueFieldTemplate.widget is None:
       self.widget = None
-    elif isinstance(widget, type):
+    elif isinstance(widget, str):
 
       childFieldPairLst = []
       for i in range(len(self.keyFields)):
         childFieldPairLst.append(
             (self.keyFields[i], self.valueFields[i])
         )
-      self.widget = widget(
+      if "." in widget:
+        widgetKlass = importClass(f"{widget}")
+      else:
+        widgetKlass = importClass(f"theory.gui.widget.{widget}")
+
+      self.widget = widgetKlass(
           self.widgetSetter,
           self.widgetGetter,
           addChildFieldFxn=self.addChildField,
@@ -1537,7 +1548,7 @@ class DictField(Field):
       super(DictField, self).renderWidget(*args, **kwargs)
 
 class AdapterField(Field):
-  widget = CheckBoxInput
+  widget = "CheckBoxInput"
 
   def __init__(self, *args, **kwargs):
     super(AdapterField, self).__init__(*args, **kwargs)
@@ -1753,10 +1764,10 @@ class SlugField(TextField):
 
 
 class StringGroupFilterField(Field):
-  widget = StringGroupFilterInput
+  widget = "StringGroupFilterInput"
 
 class ModelValidateGroupField(Field):
-  widget = ModelValidateGroupInput
+  widget = "ModelValidateGroupInput"
 
 
 class PythonModuleField(Field):
@@ -1766,7 +1777,7 @@ class PythonModuleField(Field):
 
   def __init__(self, maxLen=None, minLen=None, autoImport=False, *args, **kwargs):
     super(PythonModuleField, self).__init__(*args, **kwargs)
-    self.widget = StringInput
+    self.widget = "StringInput"
     self.autoImport = autoImport
 
   def widgetAttrs(self, widget):
@@ -1799,7 +1810,7 @@ class PythonClassField(Field):
 
   def __init__(self, maxLen=None, minLen=None, autoImport=False, klassType=None, *args, **kwargs):
     super(PythonClassField, self).__init__(*args, **kwargs)
-    self.widget = StringInput
+    self.widget = "StringInput"
     self.autoImport = autoImport
     self.klassType = klassType
 
@@ -1829,7 +1840,7 @@ class PythonClassField(Field):
     # else (value is empty and it is not required, suppress error)
 
 class QuerysetField(Field):
-  widget = QueryIdInput
+  widget = "QueryIdInput"
   defaultErrorMessages = {
     'invalid': _('Unable to import the given queryset'),
     'dbInvalid': _('Unable to find data({value}) in DB'),
@@ -1859,7 +1870,7 @@ class QuerysetField(Field):
   @appName.setter
   def appName(self, appName):
     self._appName = appName
-    if not isclass(self.widget):
+    if not isinstance(self.widget, str):
       # When form level app change, widget's ref should also be changed
       self.widget.attrs["appName"] = appName
       # force reset
@@ -1873,7 +1884,7 @@ class QuerysetField(Field):
   @mdlName.setter
   def mdlName(self, mdlName):
     self._mdlName = mdlName
-    if not isclass(self.widget):
+    if not isinstance(self.widget, str):
       # When form level app change, widget's ref should also be changed
       self.widget.attrs["mdlName"] = mdlName
       # force reset
@@ -1887,7 +1898,7 @@ class QuerysetField(Field):
 
     Raises ValidationError for any errors.
     """
-    if not isclass(self.widget):
+    if not isinstance(self.widget, str):
       # We don't clean anything in GUI. We trust data from server
       return value
 
@@ -1948,7 +1959,7 @@ class QuerysetField(Field):
     if self.required and not value:
       raise ValidationError(self.errorMessages['invalid'])
 
-    if isclass(self.widget):
+    if isinstance(self.widget, str):
       return True
 
     if self.required:
@@ -1983,7 +1994,7 @@ class QuerysetField(Field):
     cleaning."""
     # TODO: allow lazy update
     if self._finalData in validators.EMPTY_VALUES:
-      if isclass(self.widget):
+      if isinstance(self.widget, str):
         # return initial data if widget has not been rendered and finalData
         # is empty
         return self.initData
@@ -2017,7 +2028,7 @@ class QuerysetField(Field):
     super(QuerysetField, self).renderWidget(*args, **kwargs)
 
 class BinaryField(Field):
-  widget = None
+  widget = "None"
 
   def renderWidget(self, *args, **kwargs):
     pass

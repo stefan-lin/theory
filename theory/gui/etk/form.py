@@ -13,7 +13,6 @@ from theory.gui.common.baseForm import (
     FormBase,
     DeclarativeFieldsMetaclass,
     )
-from theory.gui.etk.element import Button
 from theory.gui.etk.widget import BasePacker, FilterFormLayout
 from theory.gui.transformer.theoryJSONEncoder import TheoryJSONEncoder
 from theory.utils.importlib import importClass
@@ -357,6 +356,7 @@ class StepFormBase(SimpleGuiFormBase):
     pass
 
   def generateStepControl(self, *args, **kwargs):
+    from theory.gui.etk.element import Button
     self.stepControlBox = self._createContainer(
       {"isHorizontal": True, "isWeightExpand": False}
     )
